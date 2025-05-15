@@ -16,6 +16,9 @@ ENV PORT=7860
 ENV MODEL_PATH="Sparkonix/email-classifier-model" 
 # Replace YOUR_ACTUAL_USERNAME with your Hugging Face username after uploading the model
 
+# Add this line to set cache location to a writable directory
+ENV HF_HOME="/app/.cache/huggingface"
+
 # Expose the port
 EXPOSE 7860
 
