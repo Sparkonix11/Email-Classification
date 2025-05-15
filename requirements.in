@@ -1,0 +1,40 @@
+# FastAPI for the API
+fastapi>=0.95.1
+uvicorn>=0.22.0
+
+# Pydantic (FastAPI dependency, ensure compatibility with your FastAPI version)
+# Usually, if FastAPI is Pydantic v2 compatible, this is fine:
+pydantic>=2.0.0
+
+# Transformers for the classification model
+# Your model's config.json specifies "transformers_version": "4.51.3"
+transformers==4.49
+
+# PyTorch (CPU version by default for Docker on Hugging Face Spaces)
+# Let pip choose a compatible version with transformers 4.51.3.
+# PyTorch 2.x is generally expected.
+torch>=2.0.0
+
+# SpaCy for PII Masking
+# Choose a version you've tested or a recent stable one.
+# If you resolved build issues for 3.8.x, you can use that.
+# Otherwise, 3.7.x is also robust.
+spacy>=3.5.0
+# The SpaCy model (e.g., xx_ent_wiki_sm) should be downloaded in the Dockerfile.
+
+# For model weights loading (if you use .safetensors, which is likely with transformers 4.51.3)
+safetensors
+
+# Regex library (only if you are using the third-party 'regex' package;
+# Python's built-in 're' module doesn't need to be listed)
+# regex
+
+# If your PII masking code directly uses numpy (less likely if encapsulated in SpaCy)
+# numpy
+
+# Additional dependencies
+python-multipart>=0.0.6
+huggingface-hub>=0.15.1
+spacy-transformers>=1.3.8
+xx-ent-wiki-sm @ https://github.com/explosion/spacy-models/releases/download/xx_ent_wiki_sm-3.8.0/xx_ent_wiki_sm-3.8.0-py3-none-any.whl
+en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
