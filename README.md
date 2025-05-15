@@ -1,3 +1,13 @@
+---
+title: Email Classification API
+emoji: 📧
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_file: main.py
+pinned: false
+---
+
 # Email Classification for Support Team
 
 ## Project Overview
