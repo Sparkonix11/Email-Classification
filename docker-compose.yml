@@ -1,0 +1,12 @@
+version: '3'
+
+services:
+  api:
+    build: .
+    ports:
+      - "8000:7860"
+    volumes:
+      - .:/app
+    environment:
+      - PORT=7860
+    restart: unless-stopped
