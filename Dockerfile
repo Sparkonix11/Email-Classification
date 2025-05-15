@@ -19,6 +19,9 @@ ENV MODEL_PATH="Sparkonix/email-classifier-model"
 # Add this line to set cache location to a writable directory
 ENV HF_HOME="/app/.cache/huggingface"
 
+# Create the Hugging Face cache directory and set permissions
+RUN mkdir -p /app/.cache/huggingface && chmod -R 777 /app/.cache/huggingface
+
 # Expose the port
 EXPOSE 7860
 
