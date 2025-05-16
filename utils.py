@@ -1,6 +1,7 @@
 import re
 import spacy
-from typing import List, Dict, Tuple, Any
+from typing import List, Dict, Tuple, Any, Optional
+from database import EmailDatabase
 
 class Entity:
     def __init__(self, start: int, end: int, entity_type: str, value: str):
@@ -20,7 +21,7 @@ class Entity:
         return f"Entity(type='{self.entity_type}', value='{self.value}', start={self.start}, end={self.end})"
 
 class PIIMasker:
-    def __init__(self, spacy_model_name: str = "xx_ent_wiki_sm"): # Allow model choice
+    def __init__(self, spacy_model_name: str = "xx_ent_wiki_sm", db_path: str = None): # Allow model choice
         # Load SpaCy model
         try:
             self.nlp = spacy.load(spacy_model_name)
@@ -39,7 +40,9 @@ class PIIMasker:
                     spacy.cli.download("en_core_web_sm")
                     self.nlp = spacy.load("en_core_web_sm")
 
-
+        # Initialize database connection with SQLite path
+        self.db = EmailDatabase(connection_string=db_path)
+        
         # Initialize regex patterns
         self._initialize_patterns()
 
@@ -320,12 +323,50 @@ class PIIMasker:
 
     def process_email(self, email_text: str) -> Dict[str, Any]:
         """
-        Process an email by detecting and masking PII entities
+        Process an email by detecting and masking PII entities.
+        The original email is stored in the database for later retrieval if needed.
         """
+        # Mask the email
         masked_email, entity_info = self.mask_text(email_text)
+        
+        # Store the email in the SQLite database
+        email_id, access_key = self.db.store_email(
+            original_email=email_text,
+            masked_email=masked_email,
+            masked_entities=entity_info
+        )
+        
+        # Return the processed data with database references
         return {
-            "input_email_body": email_text,
+            "input_email_body": email_text,  # Return original input for compatibility
             "list_of_masked_entities": entity_info,
             "masked_email": masked_email,
-            "category_of_the_email": ""
+            "category_of_the_email": "",
+            "email_id": email_id,
+            "access_key": access_key  # Include access key for immediate retrieval if needed
         }
+    
+    def get_original_email(self, email_id: str, access_key: str) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve the original email with PII using the email ID and access key.
+        
+        Args:
+            email_id: The ID of the stored email
+            access_key: The security key for accessing the original email
+            
+        Returns:
+            The original email data or None if not found or access_key is invalid
+        """
+        return self.db.get_original_email(email_id, access_key)
+    
+    def get_masked_email_by_id(self, email_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve a masked email by its ID (without the original PII-containing email).
+        
+        Args:
+            email_id: The ID of the stored email
+            
+        Returns:
+            The masked email data or None if not found
+        """
+        return self.db.get_email_by_id(email_id)

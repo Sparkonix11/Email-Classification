@@ -14,13 +14,17 @@ COPY . .
 # Set environment variables
 ENV PORT=7860
 ENV MODEL_PATH="Sparkonix/email-classifier-model" 
-# Replace YOUR_ACTUAL_USERNAME with your Hugging Face username after uploading the model
+
+# Change this to point to SQLite database location
+ENV DATABASE_PATH="/data/emails.db"
 
 # Add this line to set cache location to a writable directory
 ENV HF_HOME="/app/.cache/huggingface"
 
 # Create the Hugging Face cache directory and set permissions
 RUN mkdir -p /app/.cache/huggingface && chmod -R 777 /app/.cache/huggingface
+# Create data directory for SQLite
+RUN mkdir -p /data && chmod -R 777 /data
 
 # Expose the port
 EXPOSE 7860

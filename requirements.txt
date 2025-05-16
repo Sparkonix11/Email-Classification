@@ -221,6 +221,8 @@ pygments==2.19.1
     # via
     #   -r requirements.in
     #   rich
+python-dotenv==1.1.0
+    # via -r requirements.in
 python-multipart==0.0.20
     # via -r requirements.in
 pyyaml==6.0.2

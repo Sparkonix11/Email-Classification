@@ -1,0 +1,596 @@
+{
+    "info": {
+      "_postman_id": "7e5f2c6b-3e5d-4e40-a8f6-abc9f0c92a72",
+      "name": "Email Classification API Tests",
+      "description": "Tests for the Email Classification API hosted on Hugging Face Spaces",
+      "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "variable": [
+      {
+        "key": "baseUrl",
+        "value": "https://sparkonix-email-classification-model.hf.space",
+        "type": "string"
+      },
+      {
+        "key": "emailId",
+        "value": ""
+      },
+      {
+        "key": "accessKey",
+        "value": ""
+      },
+      {
+        "key": "piiEmailId",
+        "value": ""
+      },
+      {
+        "key": "piiAccessKey",
+        "value": ""
+      }
+    ],
+    "item": [
+      {
+        "name": "Health Check",
+        "request": {
+          "method": "GET",
+          "header": [],
+          "url": {
+            "raw": "{{baseUrl}}/health",
+            "host": [
+              "{{baseUrl}}"
+            ],
+            "path": [
+              "health"
+            ]
+          },
+          "description": "Check if the API is running"
+        },
+        "event": [
+          {
+            "listen": "test",
+            "script": {
+              "exec": [
+                "// Check if the response status is 200 OK",
+                "pm.test(\"Status code is 200\", function() {",
+                "    pm.response.to.have.status(200);",
+                "});",
+                "",
+                "// Check if the health check returns the correct structure",
+                "pm.test(\"Health check returns correct structure\", function() {",
+                "    var jsonData = pm.response.json();",
+                "    pm.expect(jsonData).to.have.property(\"status\");",
+                "    pm.expect(jsonData).to.have.property(\"message\");",
+                "    pm.expect(jsonData.status).to.eql(\"healthy\");",
+                "});"
+              ],
+              "type": "text/javascript"
+            }
+          }
+        ],
+        "response": []
+      },
+      {
+        "name": "Basic Email Classification",
+        "request": {
+          "method": "POST",
+          "header": [],
+          "body": {
+            "mode": "raw",
+            "raw": "{\n    \"input_email_body\": \"Hi, I am experiencing a problem with my login. The system is showing an error when I try to log in. Please help.\"\n}",
+            "options": {
+              "raw": {
+                "language": "json"
+              }
+            }
+          },
+          "url": {
+            "raw": "{{baseUrl}}/classify",
+            "host": [
+              "{{baseUrl}}"
+            ],
+            "path": [
+              "classify"
+            ]
+          },
+          "description": "Basic email classification test"
+        },
+        "event": [
+          {
+            "listen": "test",
+            "script": {
+              "exec": [
+                "// Check if the response status is 200 OK",
+                "pm.test(\"Status code is 200\", function() {",
+                "    pm.response.to.have.status(200);",
+                "});",
+                "",
+                "// Check if the response structure is correct",
+                "pm.test(\"Response has correct structure\", function() {",
+                "    var jsonData = pm.response.json();",
+                "    pm.expect(jsonData).to.have.property(\"input_email_body\");",
+                "    pm.expect(jsonData).to.have.property(\"masked_email\");",
+                "    pm.expect(jsonData).to.have.property(\"list_of_masked_entities\");",
+                "    pm.expect(jsonData).to.have.property(\"category_of_the_email\");",
+                "});",
+                "",
+                "// Check if the input email matches what we sent",
+                "pm.test(\"Input email matches request\", function() {",
+                "    var jsonData = pm.response.json();",
+                "    pm.expect(jsonData.input_email_body).to.eql(",
+                "        \"Hi, I am experiencing a problem with my login. The system is showing an error when I try to log in. Please help.\"",
+                "    );",
+                "});",
+                "",
+                "// Check if the category is one of the expected values",
+                "pm.test(\"Category is valid\", function() {",
+                "    var jsonData = pm.response.json();",
+                "    pm.expect([\"Incident\", \"Request\", \"Change\", \"Problem\"]).to.include(jsonData.category_of_the_email);",
+                "});",
+                "",
+                "// Store the email_id and access_key for database retrieval tests",
+                "var responseJson = pm.response.json();",
+                "if (responseJson.email_id && responseJson.access_key) {",
+                "    pm.collectionVariables.set(\"emailId\", responseJson.email_id);",
+                "    pm.collectionVariables.set(\"accessKey\", responseJson.access_key);",
+                "    console.log(\"Stored email_id and access_key for retrieval tests\");",
+                "}"
+              ],
+              "type": "text/javascript"
+            }
+          }
+        ],
+        "response": []
+      },
+      {
+        "name": "Email with PII Classification",
+        "request": {
+          "method": "POST",
+          "header": [],
+          "body": {
+            "mode": "raw",
+            "raw": "{\n    \"input_email_body\": \"Hello, my name is John Smith and my email is john.smith@example.com. I am having issues with my account. My phone number is 555-123-4567 and my credit card ending in 1234 seems to have been charged twice. Please help.\"\n}",
+            "options": {
+              "raw": {
+                "language": "json"
+              }
+            }
+          },
+          "url": {
+            "raw": "{{baseUrl}}/classify",
+            "host": [
+              "{{baseUrl}}"
+            ],
+            "path": [
+              "classify"
+            ]
+          },
+          "description": "Email classification with PII masking test"
+        },
+        "event": [
+          {
+            "listen": "test",
+            "script": {
+              "exec": [
+                "// Check if the response status is 200 OK",
+                "pm.test(\"Status code is 200\", function() {",
+                "    pm.response.to.have.status(200);",
+                "});",
+                "",
+                "// Check if PII is being masked",
+                "pm.test(\"PII is masked properly\", function() {",
+                "    var jsonData = pm.response.json();",
+                "    pm.expect(jsonData.masked_email).to.not.include(\"John Smith\");",
+                "    pm.expect(jsonData.masked_email).to.not.include(\"john.smith@example.com\");",
+                "    pm.expect(jsonData.masked_email).to.not.include(\"555-123-4567\");",
+                "    pm.expect(jsonData.masked_email).to.not.include(\"1234\");",
+                "});",
+                "",
+                "// Check if masked entities list is populated",
+                "pm.test(\"Masked entities list is populated\", function() {",
+                "    var jsonData = pm.response.json();",
+                "    pm.expect(jsonData.list_of_masked_entities).to.be.an(\"array\").that.is.not.empty;",
+                "});",
+                "",
+                "// Store the email_id and access_key for database retrieval tests specifically for PII emails",
+                "var responseJson = pm.response.json();",
+                "if (responseJson.email_id && responseJson.access_key) {",
+                "    pm.collectionVariables.set(\"piiEmailId\", responseJson.email_id);",
+                "    pm.collectionVariables.set(\"piiAccessKey\", responseJson.access_key);",
+                "    console.log(\"Stored PII email_id and access_key for retrieval tests\");",
+                "}"
+              ],
+              "type": "text/javascript"
+            }
+          }
+        ],
+        "response": []
+      },
+      {
+        "name": "Incident Email Classification",
+        "request": {
+          "method": "POST",
+          "header": [],
+          "body": {
+            "mode": "raw",
+            "raw": "{\n    \"input_email_body\": \"URGENT: The application is down. None of our users can access the system. This is causing severe business impact and we need immediate attention. Our customer operations are halted.\"\n}",
+            "options": {
+              "raw": {
+                "language": "json"
+              }
+            }
+          },
+          "url": {
+            "raw": "{{baseUrl}}/classify",
+            "host": [
+              "{{baseUrl}}"
+            ],
+            "path": [
+              "classify"
+            ]
+          },
+          "description": "Test for incident classification"
+        },
+        "event": [
+          {
+            "listen": "test",
+            "script": {
+              "exec": [
+                "// Check if the response status is 200 OK",
+                "pm.test(\"Status code is 200\", function() {",
+                "    pm.response.to.have.status(200);",
+                "});",
+                "",
+                "// This should likely be classified as an Incident",
+                "pm.test(\"Should be classified as an Incident\", function() {",
+                "    var jsonData = pm.response.json();",
+                "    pm.expect(jsonData.category_of_the_email).to.eql(\"Incident\");",
+                "});"
+              ],
+              "type": "text/javascript"
+            }
+          }
+        ],
+        "response": []
+      },
+      {
+        "name": "Request Email Classification",
+        "request": {
+          "method": "POST",
+          "header": [],
+          "body": {
+            "mode": "raw",
+            "raw": "{\n    \"input_email_body\": \"I would like to request access to the financial reporting system for my new team member. Their details are as follows: Name: Jane Doe, Department: Finance, Employee ID: 12345. Please provide access by end of week.\"\n}",
+            "options": {
+              "raw": {
+                "language": "json"
+              }
+            }
+          },
+          "url": {
+            "raw": "{{baseUrl}}/classify",
+            "host": [
+              "{{baseUrl}}"
+            ],
+            "path": [
+              "classify"
+            ]
+          },
+          "description": "Test for request classification"
+        },
+        "event": [
+          {
+            "listen": "test",
+            "script": {
+              "exec": [
+                "// Check if the response status is 200 OK",
+                "pm.test(\"Status code is 200\", function() {",
+                "    pm.response.to.have.status(200);",
+                "});",
+                "",
+                "// This should likely be classified as a Request",
+                "pm.test(\"Should be classified as a Request\", function() {",
+                "    var jsonData = pm.response.json();",
+                "    pm.expect(jsonData.category_of_the_email).to.eql(\"Request\");",
+                "});",
+                "",
+                "// Check if PII is masked",
+                "pm.test(\"Name should be masked\", function() {",
+                "    var jsonData = pm.response.json();",
+                "    pm.expect(jsonData.masked_email).to.not.include(\"Jane Doe\");",
+                "});"
+              ],
+              "type": "text/javascript"
+            }
+          }
+        ],
+        "response": []
+      },
+      {
+        "name": "Change Email Classification",
+        "request": {
+          "method": "POST",
+          "header": [],
+          "body": {
+            "mode": "raw",
+            "raw": "{\n    \"input_email_body\": \"We need to change the configuration of the production server to increase memory allocation. Please schedule this change for the next maintenance window this Sunday at 2 AM. Approval has been granted by the IT Director.\"\n}",
+            "options": {
+              "raw": {
+                "language": "json"
+              }
+            }
+          },
+          "url": {
+            "raw": "{{baseUrl}}/classify",
+            "host": [
+              "{{baseUrl}}"
+            ],
+            "path": [
+              "classify"
+            ]
+          },
+          "description": "Test for change classification"
+        },
+        "event": [
+          {
+            "listen": "test",
+            "script": {
+              "exec": [
+                "// Check if the response status is 200 OK",
+                "pm.test(\"Status code is 200\", function() {",
+                "    pm.response.to.have.status(200);",
+                "});",
+                "",
+                "// This should likely be classified as a Change",
+                "pm.test(\"Should be classified as a Change\", function() {",
+                "    var jsonData = pm.response.json();",
+                "    pm.expect(jsonData.category_of_the_email).to.eql(\"Change\");",
+                "});"
+              ],
+              "type": "text/javascript"
+            }
+          }
+        ],
+        "response": []
+      },
+      {
+        "name": "Problem Email Classification",
+        "request": {
+          "method": "POST",
+          "header": [],
+          "body": {
+            "mode": "raw",
+            "raw": "{\n    \"input_email_body\": \"We have noticed that the application has been running slow for the past week. This happens consistently during peak hours (10 AM - 2 PM). Can you investigate the root cause of this ongoing performance issue?\"\n}",
+            "options": {
+              "raw": {
+                "language": "json"
+              }
+            }
+          },
+          "url": {
+            "raw": "{{baseUrl}}/classify",
+            "host": [
+              "{{baseUrl}}"
+            ],
+            "path": [
+              "classify"
+            ]
+          },
+          "description": "Test for problem classification"
+        },
+        "event": [
+          {
+            "listen": "test",
+            "script": {
+              "exec": [
+                "// Check if the response status is 200 OK",
+                "pm.test(\"Status code is 200\", function() {",
+                "    pm.response.to.have.status(200);",
+                "});",
+                "",
+                "// This should likely be classified as a Problem",
+                "pm.test(\"Should be classified as a Problem\", function() {",
+                "    var jsonData = pm.response.json();",
+                "    pm.expect(jsonData.category_of_the_email).to.eql(\"Problem\");",
+                "});"
+              ],
+              "type": "text/javascript"
+            }
+          }
+        ],
+        "response": []
+      },
+      {
+        "name": "Empty Email Test",
+        "request": {
+          "method": "POST",
+          "header": [],
+          "body": {
+            "mode": "raw",
+            "raw": "{\n    \"input_email_body\": \"\"\n}",
+            "options": {
+              "raw": {
+                "language": "json"
+              }
+            }
+          },
+          "url": {
+            "raw": "{{baseUrl}}/classify",
+            "host": [
+              "{{baseUrl}}"
+            ],
+            "path": [
+              "classify"
+            ]
+          },
+          "description": "Test with empty email body"
+        },
+        "event": [
+          {
+            "listen": "test",
+            "script": {
+              "exec": [
+                "// The API should either return an error or a classification",
+                "pm.test(\"Response status is valid\", function() {",
+                "    pm.expect(pm.response.code).to.be.oneOf([200, 400, 422, 500]);",
+                "    ",
+                "    if (pm.response.code === 200) {",
+                "        var jsonData = pm.response.json();",
+                "        pm.expect(jsonData).to.have.property(\"category_of_the_email\");",
+                "    } else {",
+                "        // If it is an error response, make sure it has a proper structure",
+                "        var jsonData = pm.response.json();",
+                "        pm.expect(jsonData).to.have.property(\"detail\");",
+                "    }",
+                "});"
+              ],
+              "type": "text/javascript"
+            }
+          }
+        ],
+        "response": []
+      },
+      {
+        "name": "Retrieve Original Email",
+        "request": {
+          "method": "POST",
+          "header": [],
+          "body": {
+            "mode": "raw",
+            "raw": "{\n    \"email_id\": \"{{piiEmailId}}\",\n    \"access_key\": \"{{piiAccessKey}}\"\n}",
+            "options": {
+              "raw": {
+                "language": "json"
+              }
+            }
+          },
+          "url": {
+            "raw": "{{baseUrl}}/api/v1/original-email/retrieve",
+            "host": [
+              "{{baseUrl}}"
+            ],
+            "path": [
+              "api",
+              "v1",
+              "original-email",
+              "retrieve"
+            ]
+          },
+          "description": "Retrieve the original unmasked email from the database"
+        },
+        "event": [
+          {
+            "listen": "test",
+            "script": {
+              "exec": [
+                "// Check if the response status is 200 OK",
+                "pm.test(\"Status code is 200\", function() {",
+                "    pm.response.to.have.status(200);",
+                "});",
+                "",
+                "// Check if the response has the correct structure",
+                "pm.test(\"Response has correct structure\", function() {",
+                "    var jsonData = pm.response.json();",
+                "    pm.expect(jsonData).to.have.property(\"status\");",
+                "    pm.expect(jsonData).to.have.property(\"data\");",
+                "    pm.expect(jsonData).to.have.property(\"message\");",
+                "    pm.expect(jsonData.status).to.eql(\"success\");",
+                "});",
+                "",
+                "// Check if the data contains the original email with PII",
+                "pm.test(\"Data contains original email with PII\", function() {",
+                "    var jsonData = pm.response.json();",
+                "    pm.expect(jsonData.data).to.have.property(\"original_email\");",
+                "    pm.expect(jsonData.data).to.have.property(\"masked_email\");",
+                "    pm.expect(jsonData.data).to.have.property(\"masked_entities\");",
+                "    ",
+                "    // Check that the original email contains the PII (for the PII test email)",
+                "    if (pm.collectionVariables.get(\"piiEmailId\")) {",
+                "        pm.expect(jsonData.data.original_email).to.include(\"John Smith\");",
+                "        pm.expect(jsonData.data.original_email).to.include(\"john.smith@example.com\");",
+                "        pm.expect(jsonData.data.original_email).to.include(\"555-123-4567\");",
+                "    }",
+                "});"
+              ],
+              "type": "text/javascript"
+            }
+          }
+        ],
+        "response": []
+      },
+      {
+        "name": "Retrieve With Invalid Access Key",
+        "request": {
+          "method": "POST",
+          "header": [],
+          "body": {
+            "mode": "raw",
+            "raw": "{\n    \"email_id\": \"{{piiEmailId}}\",\n    \"access_key\": \"invalid_access_key_123456\"\n}",
+            "options": {
+              "raw": {
+                "language": "json"
+              }
+            }
+          },
+          "url": {
+            "raw": "{{baseUrl}}/api/v1/original-email/retrieve",
+            "host": [
+              "{{baseUrl}}"
+            ],
+            "path": [
+              "api",
+              "v1",
+              "original-email",
+              "retrieve"
+            ]
+          },
+          "description": "Test security by attempting to retrieve email with invalid access key"
+        },
+        "event": [
+          {
+            "listen": "test",
+            "script": {
+              "exec": [
+                "// Check that we get an error (404) for invalid access key",
+                "pm.test(\"Should return error for invalid access key\", function() {",
+                "    pm.expect(pm.response.code).to.equal(404);",
+                "});",
+                "",
+                "// Check error message",
+                "pm.test(\"Response contains appropriate error message\", function() {",
+                "    var jsonData = pm.response.json();",
+                "    pm.expect(jsonData).to.have.property(\"detail\");",
+                "    pm.expect(jsonData.detail).to.include(\"not found\");",
+                "});"
+              ],
+              "type": "text/javascript"
+            }
+          }
+        ],
+        "response": []
+      }
+    ],
+    "event": [
+      {
+        "listen": "prerequest",
+        "script": {
+          "type": "text/javascript",
+          "exec": [
+            "// Reset the tests passed flag before each request",
+            "pm.variables.set(\"testsPassed\", true);"
+          ]
+        }
+      },
+      {
+        "listen": "test",
+        "script": {
+          "type": "text/javascript",
+          "exec": [
+            "// Update the tests passed flag if any tests failed",
+            "if (pm.test.allTests.filter(test => !test.passed).length > 0) {",
+            "    pm.variables.set(\"testsPassed\", false);",
+            "}"
+          ]
+        }
+      }
+    ]
+  }
