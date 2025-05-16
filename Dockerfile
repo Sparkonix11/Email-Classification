@@ -15,8 +15,11 @@ COPY . .
 ENV PORT=7860
 ENV MODEL_PATH="Sparkonix/email-classifier-model" 
 
-# Change this to point to SQLite database location
+# SQLite database path
 ENV DATABASE_PATH="/data/emails.db"
+
+# Global access key for email retrieval
+ENV EMAIL_ACCESS_KEY="access_key_123"
 
 # Add this line to set cache location to a writable directory
 ENV HF_HOME="/app/.cache/huggingface"

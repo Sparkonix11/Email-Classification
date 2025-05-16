@@ -329,21 +329,20 @@ class PIIMasker:
         # Mask the email
         masked_email, entity_info = self.mask_text(email_text)
         
-        # Store the email in the SQLite database
-        email_id, access_key = self.db.store_email(
+        # Store the email in the SQLite database - only get back email_id now
+        email_id = self.db.store_email(
             original_email=email_text,
             masked_email=masked_email,
             masked_entities=entity_info
         )
         
-        # Return the processed data with database references
+        # Return the processed data with just the email_id
         return {
-            "input_email_body": email_text,  # Return original input for compatibility
+            "input_email_body": email_text,  # Return original input for API compatibility
             "list_of_masked_entities": entity_info,
             "masked_email": masked_email,
             "category_of_the_email": "",
-            "email_id": email_id,
-            "access_key": access_key  # Include access key for immediate retrieval if needed
+            "email_id": email_id
         }
     
     def get_original_email(self, email_id: str, access_key: str) -> Optional[Dict[str, Any]]:
@@ -370,3 +369,15 @@ class PIIMasker:
             The masked email data or None if not found
         """
         return self.db.get_email_by_id(email_id)
+        
+    def get_original_by_masked_email(self, masked_email: str) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve the original unmasked email using the masked email content.
+        
+        Args:
+            masked_email: The masked version of the email to search for
+            
+        Returns:
+            The original email data or None if not found
+        """
+        return self.db.get_email_by_masked_content(masked_email)

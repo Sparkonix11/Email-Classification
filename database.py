@@ -7,7 +7,6 @@ import sqlite3
 from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime
 import uuid
-import hashlib
 
 
 class EmailDatabase:
@@ -29,6 +28,9 @@ class EmailDatabase:
             "DATABASE_PATH", 
             "/data/emails.db"  # This path persists in Hugging Face Spaces
         )
+        
+        # Get the global access key from environment variables
+        self.access_key = os.environ.get("EMAIL_ACCESS_KEY", "default_secure_access_key")
         
         # Ensure the data directory exists
         self._ensure_data_directory()
@@ -64,13 +66,9 @@ class EmailDatabase:
                 masked_email TEXT NOT NULL,
                 masked_entities TEXT NOT NULL, 
                 category TEXT,
-                created_at TEXT NOT NULL,
-                access_key TEXT NOT NULL
+                created_at TEXT NOT NULL
             )
             ''')
-            
-            # Create an index on the access_key field
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_access_key ON emails (access_key)')
             
             conn.commit()
         except Exception as e:
@@ -83,17 +81,8 @@ class EmailDatabase:
         """Generate a unique ID for the email record."""
         return str(uuid.uuid4())
     
-    def _generate_access_key(self, email_id: str) -> str:
-        """
-        Generate an access key for retrieving the original email.
-        This acts as a security measure to prevent unauthorized access.
-        """
-        # Use a combination of the email ID and a timestamp, hashed
-        data = f"{email_id}:{datetime.now().isoformat()}:{os.urandom(8).hex()}"
-        return hashlib.sha256(data.encode()).hexdigest()
-    
     def store_email(self, original_email: str, masked_email: str, 
-                   masked_entities: List[Dict[str, Any]], category: Optional[str] = None) -> Tuple[str, str]:
+                   masked_entities: List[Dict[str, Any]], category: Optional[str] = None) -> str:
         """
         Store the original email along with its masked version and related information.
         
@@ -104,32 +93,30 @@ class EmailDatabase:
             category: Optional category of the email
             
         Returns:
-            Tuple of (email_id, access_key) for future reference
+            email_id for future reference
         """
         conn = self._get_connection()
         try:
             cursor = conn.cursor()
             
             email_id = self._generate_id()
-            access_key = self._generate_access_key(email_id)
             
             # Store the email data
             cursor.execute(
-                'INSERT INTO emails (id, original_email, masked_email, masked_entities, category, created_at, access_key) '
-                'VALUES (?, ?, ?, ?, ?, ?, ?)',
+                'INSERT INTO emails (id, original_email, masked_email, masked_entities, category, created_at) '
+                'VALUES (?, ?, ?, ?, ?, ?)',
                 (
                     email_id,
                     original_email,
                     masked_email,
                     json.dumps(masked_entities),  # Convert to JSON string for SQLite
                     category,
-                    datetime.now().isoformat(),
-                    access_key
+                    datetime.now().isoformat()
                 )
             )
             
             conn.commit()
-            return email_id, access_key
+            return email_id
         except Exception as e:
             conn.rollback()
             raise e
@@ -147,14 +134,18 @@ class EmailDatabase:
         Returns:
             Dictionary with email data or None if not found or access_key is invalid
         """
+        # Verify the access key matches the global access key
+        if access_key != self.access_key:
+            return None
+            
         conn = self._get_connection()
         try:
             cursor = conn.cursor()
             
             cursor.execute(
                 'SELECT id, original_email, masked_email, masked_entities, category, created_at '
-                'FROM emails WHERE id = ? AND access_key = ?',
-                (email_id, access_key)
+                'FROM emails WHERE id = ?',
+                (email_id,)
             )
             
             row = cursor.fetchone()
@@ -202,6 +193,41 @@ class EmailDatabase:
                 "masked_entities": json.loads(row[2]),  # Convert from JSON string back to Python dict
                 "category": row[3],
                 "created_at": row[4]
+            }
+        finally:
+            conn.close()
+    
+    def get_email_by_masked_content(self, masked_email: str) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve the original email using the masked email content.
+        
+        Args:
+            masked_email: The masked version of the email to search for
+            
+        Returns:
+            Dictionary with full email data or None if not found
+        """
+        conn = self._get_connection()
+        try:
+            cursor = conn.cursor()
+            
+            cursor.execute(
+                'SELECT id, original_email, masked_email, masked_entities, category, created_at '
+                'FROM emails WHERE masked_email = ?',
+                (masked_email,)
+            )
+            
+            row = cursor.fetchone()
+            if not row:
+                return None
+                
+            return {
+                "id": row[0],
+                "original_email": row[1],
+                "masked_email": row[2],
+                "masked_entities": json.loads(row[3]),  # Convert from JSON string back to Python dict
+                "category": row[4],
+                "created_at": row[5]
             }
         finally:
             conn.close()

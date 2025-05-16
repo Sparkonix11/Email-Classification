@@ -12,20 +12,14 @@
         "type": "string"
       },
       {
-        "key": "emailId",
-        "value": ""
+        "key": "maskedEmailWithPII",
+        "value": "",
+        "type": "string"
       },
       {
         "key": "accessKey",
-        "value": ""
-      },
-      {
-        "key": "piiEmailId",
-        "value": ""
-      },
-      {
-        "key": "piiAccessKey",
-        "value": ""
+        "value": "local_dev_secure_access_key_20240516",
+        "type": "string"
       }
     ],
     "item": [
@@ -125,15 +119,7 @@
                 "pm.test(\"Category is valid\", function() {",
                 "    var jsonData = pm.response.json();",
                 "    pm.expect([\"Incident\", \"Request\", \"Change\", \"Problem\"]).to.include(jsonData.category_of_the_email);",
-                "});",
-                "",
-                "// Store the email_id and access_key for database retrieval tests",
-                "var responseJson = pm.response.json();",
-                "if (responseJson.email_id && responseJson.access_key) {",
-                "    pm.collectionVariables.set(\"emailId\", responseJson.email_id);",
-                "    pm.collectionVariables.set(\"accessKey\", responseJson.access_key);",
-                "    console.log(\"Stored email_id and access_key for retrieval tests\");",
-                "}"
+                "});"
               ],
               "type": "text/javascript"
             }
@@ -191,13 +177,10 @@
                 "    pm.expect(jsonData.list_of_masked_entities).to.be.an(\"array\").that.is.not.empty;",
                 "});",
                 "",
-                "// Store the email_id and access_key for database retrieval tests specifically for PII emails",
+                "// Store the masked email for later unmasking test",
                 "var responseJson = pm.response.json();",
-                "if (responseJson.email_id && responseJson.access_key) {",
-                "    pm.collectionVariables.set(\"piiEmailId\", responseJson.email_id);",
-                "    pm.collectionVariables.set(\"piiAccessKey\", responseJson.access_key);",
-                "    console.log(\"Stored PII email_id and access_key for retrieval tests\");",
-                "}"
+                "pm.collectionVariables.set(\"maskedEmailWithPII\", responseJson.masked_email);",
+                "console.log(\"Stored masked email for unmasking tests\");"
               ],
               "type": "text/javascript"
             }
@@ -450,13 +433,13 @@
         "response": []
       },
       {
-        "name": "Retrieve Original Email",
+        "name": "Unmask Email by Content",
         "request": {
           "method": "POST",
           "header": [],
           "body": {
             "mode": "raw",
-            "raw": "{\n    \"email_id\": \"{{piiEmailId}}\",\n    \"access_key\": \"{{piiAccessKey}}\"\n}",
+            "raw": "{\n    \"masked_email\": \"{{maskedEmailWithPII}}\",\n    \"access_key\": \"{{accessKey}}\"\n}",
             "options": {
               "raw": {
                 "language": "json"
@@ -464,18 +447,17 @@
             }
           },
           "url": {
-            "raw": "{{baseUrl}}/api/v1/original-email/retrieve",
+            "raw": "{{baseUrl}}/api/v1/unmask-email",
             "host": [
               "{{baseUrl}}"
             ],
             "path": [
               "api",
               "v1",
-              "original-email",
-              "retrieve"
+              "unmask-email"
             ]
           },
-          "description": "Retrieve the original unmasked email from the database"
+          "description": "Retrieve the original unmasked email using the masked content"
         },
         "event": [
           {
@@ -503,8 +485,9 @@
                 "    pm.expect(jsonData.data).to.have.property(\"masked_email\");",
                 "    pm.expect(jsonData.data).to.have.property(\"masked_entities\");",
                 "    ",
-                "    // Check that the original email contains the PII (for the PII test email)",
-                "    if (pm.collectionVariables.get(\"piiEmailId\")) {",
+                "    // Check that the original email contains the PII",
+                "    var maskedEmailWithPII = pm.collectionVariables.get(\"maskedEmailWithPII\");",
+                "    if (maskedEmailWithPII) {",
                 "        pm.expect(jsonData.data.original_email).to.include(\"John Smith\");",
                 "        pm.expect(jsonData.data.original_email).to.include(\"john.smith@example.com\");",
                 "        pm.expect(jsonData.data.original_email).to.include(\"555-123-4567\");",
@@ -518,13 +501,13 @@
         "response": []
       },
       {
-        "name": "Retrieve With Invalid Access Key",
+        "name": "Unmask Email with Invalid Access Key",
         "request": {
           "method": "POST",
           "header": [],
           "body": {
             "mode": "raw",
-            "raw": "{\n    \"email_id\": \"{{piiEmailId}}\",\n    \"access_key\": \"invalid_access_key_123456\"\n}",
+            "raw": "{\n    \"masked_email\": \"{{maskedEmailWithPII}}\",\n    \"access_key\": \"invalid_access_key_123456\"\n}",
             "options": {
               "raw": {
                 "language": "json"
@@ -532,26 +515,75 @@
             }
           },
           "url": {
-            "raw": "{{baseUrl}}/api/v1/original-email/retrieve",
+            "raw": "{{baseUrl}}/api/v1/unmask-email",
             "host": [
               "{{baseUrl}}"
             ],
             "path": [
               "api",
               "v1",
-              "original-email",
-              "retrieve"
+              "unmask-email"
             ]
           },
-          "description": "Test security by attempting to retrieve email with invalid access key"
+          "description": "Test security by attempting to unmask email with invalid access key"
         },
         "event": [
           {
             "listen": "test",
             "script": {
               "exec": [
-                "// Check that we get an error (404) for invalid access key",
+                "// Check that we get an error (401) for invalid access key",
                 "pm.test(\"Should return error for invalid access key\", function() {",
+                "    pm.expect(pm.response.code).to.equal(401);",
+                "});",
+                "",
+                "// Check error message",
+                "pm.test(\"Response contains appropriate error message\", function() {",
+                "    var jsonData = pm.response.json();",
+                "    pm.expect(jsonData).to.have.property(\"detail\");",
+                "    pm.expect(jsonData.detail).to.include(\"Invalid access key\");",
+                "});"
+              ],
+              "type": "text/javascript"
+            }
+          }
+        ],
+        "response": []
+      },
+      {
+        "name": "Unmask with Non-existent Email Content",
+        "request": {
+          "method": "POST",
+          "header": [],
+          "body": {
+            "mode": "raw",
+            "raw": "{\n    \"masked_email\": \"This is a masked email that does not exist in the database [FULL_NAME].\",\n    \"access_key\": \"{{accessKey}}\"\n}",
+            "options": {
+              "raw": {
+                "language": "json"
+              }
+            }
+          },
+          "url": {
+            "raw": "{{baseUrl}}/api/v1/unmask-email",
+            "host": [
+              "{{baseUrl}}"
+            ],
+            "path": [
+              "api",
+              "v1",
+              "unmask-email"
+            ]
+          },
+          "description": "Test error handling when masked email content doesn't exist"
+        },
+        "event": [
+          {
+            "listen": "test",
+            "script": {
+              "exec": [
+                "// Check that we get a 404 error for non-existent email content",
+                "pm.test(\"Should return 404 for non-existent email content\", function() {",
                 "    pm.expect(pm.response.code).to.equal(404);",
                 "});",
                 "",
