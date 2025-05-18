@@ -50,12 +50,8 @@ class PIIMasker:
         # Define regex patterns for different entity types
         self.patterns = {
             "email": r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
-            # Enhanced phone number regex that handles international formats:
-            # - International prefix with country code: +XX, +XXX (optional)
-            # - Various delimiter formats: spaces, hyphens, periods, or nothing
-            # - Different grouping patterns for various countries
-            # - Overall length between 8-15 digits (excluding formatting characters)
-            "phone_number": r'\b(?:(?:\+|00)[1-9]\d{0,3}[\s.-]?)?(?:\(?\d{1,5}\)?[\s.-]?)?(?:\d{1,5}[\s.-]?)??(?:\d{1,5}[\s.-]?)??(?:\d{1,5}[\s.-]?)?\d{1,5}(?:[\s.-]?\d{1,5})?\b',
+            # More precise phone number regex that handles international formats while avoiding false positives
+            "phone_number": r'\b(?:(?:\+|00)[1-9]\d{0,3}[-\s.]?)(?:\(?\d{1,5}\)?[-\s.]?)?(?:\d{1,5}[-\s.]?){1,4}\d{1,5}\b',
             # Card number regex: common formats, allows optional spaces/hyphens
             "credit_debit_no": r'\b(?:(?:\d{4}[\s-]?){3}\d{4}|\d{13,19})\b',
             # CVV: 3 or 4 digits, ensuring it's a standalone number (word boundary)
@@ -76,14 +72,17 @@ class PIIMasker:
                 start, end = match.span()
                 value = match.group()
 
-                # Specific verifications
+                # Specific verifications for each entity type
                 if entity_type == "credit_debit_no":
                     if not self.verify_credit_card(text, match):
                         continue
                 elif entity_type == "cvv_no":
                     if not self.verify_cvv(text, match):
                         continue
-                elif entity_type == "dob": # Using the generic context verifier for DOB
+                elif entity_type == "phone_number":
+                    if not self.verify_phone_number(text, match):
+                        continue
+                elif entity_type == "dob":
                     if not self._verify_with_context(text, start, end, ["birth", "dob", "born"]):
                         continue
 
@@ -91,7 +90,7 @@ class PIIMasker:
                 # This is a simple check; more robust overlap handling is done later
                 is_substring_of_existing = False
                 for existing_entity in entities:
-                    if existing_entity.start <= start and existing_entity.end >= end and existing_entity.value != value :
+                    if existing_entity.start <= start and existing_entity.end >= end and existing_entity.value != value:
                         is_substring_of_existing = True
                         break
                 if is_substring_of_existing:
@@ -173,6 +172,49 @@ class PIIMasker:
 
         return is_cvv_context and not (is_date_context and looks_like_year)
 
+    def verify_phone_number(self, text: str, match: re.Match) -> bool:
+        """
+        Verify if a match is actually a phone number using validation rules and context.
+        
+        This helps prevent:
+        1. CVV numbers being detected as phone numbers
+        2. Parts of a phone number being detected as separate numbers
+        3. Random digit sequences being detected as phone numbers
+        """
+        value = match.group()
+        start, end = match.span()
+        
+        # 1. Minimum digit count check (excluding formatting chars)
+        digit_count = sum(1 for c in value if c.isdigit())
+        if digit_count < 6:
+            return False  # Too few digits to be a valid phone number
+        
+        if digit_count > 15:
+            return False  # Too many digits to be a realistic phone number
+            
+        # 2. Context check for phone numbers
+        context_window = 50
+        context_before = text[max(0, start - context_window):start].lower()
+        context_after = text[end:min(len(text), end + context_window)].lower()
+        
+        phone_keywords = [
+            "phone", "call", "tel", "telephone", "contact", "dial", 
+            "mobile", "cell", "number", "direct", "office", "fax"
+        ]
+        
+        # If phone context keywords are found, increase confidence
+        has_phone_context = any(kw in context_before or kw in context_after for kw in phone_keywords)
+        
+        # 3. Check if this is likely part of a larger number or another entity
+        # Look for specific formatted patterns that indicate complete phone numbers
+        is_clean_formatted = bool(re.search(r'(?:\+\d{1,4}[-\s])?(?:\(\d+\)[-\s]?)?\d+(?:[-\s]\d+)+', value))
+        
+        # If not properly formatted but has a plus sign, it's likely an international number
+        has_intl_prefix = value.startswith('+') or value.startswith('00')
+        
+        # If it has at least some formatting and reasonable digit count, or has clear phone context,
+        # we'll consider it a valid phone number
+        return (is_clean_formatted and digit_count >= 7) or (has_intl_prefix and digit_count >= 8) or (has_phone_context and digit_count >= 7)
 
     def detect_name_entities(self, text: str) -> List[Entity]:
         """Detect name entities using SpaCy NER"""
@@ -298,13 +340,10 @@ class PIIMasker:
         entities = self.detect_all_entities(text)
         entity_info = [entity.to_dict() for entity in entities]
 
-        masked_text = list(text) # Use list of chars for easier replacement
-
         # Sort entities by start position to ensure correct masking,
         # longest first at same start to prevent partial masking by shorter entities
         entities.sort(key=lambda x: (x.start, -(x.end - x.start)))
 
-        offset = 0
         new_text_parts = []
         current_pos = 0
 
@@ -313,8 +352,8 @@ class PIIMasker:
             if entity.start > current_pos:
                 new_text_parts.append(text[current_pos:entity.start])
 
-            # Add the mask
-            mask = f"[{entity.entity_type}]" # Changed to upper for clarity
+            # Add the mask with entity type in uppercase for better visibility
+            mask = f"[{entity.entity_type.upper()}]"
             new_text_parts.append(mask)
 
             current_pos = entity.end
