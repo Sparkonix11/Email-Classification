@@ -50,8 +50,8 @@ class PIIMasker:
         # Define regex patterns for different entity types
         self.patterns = {
             "email": r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
-            # More precise phone number regex that handles international formats while avoiding false positives
-            "phone_number": r'\b(?:(?:\+|00)[1-9]\d{0,3}[-\s.]?)(?:\(?\d{1,5}\)?[-\s.]?)?(?:\d{1,5}[-\s.]?){1,4}\d{1,5}\b',
+            # Simplified phone regex to capture both standard and international formats
+            "phone_number": r'\b(?:(?:\+|00)[1-9]\d{0,3}[-\s.]?)?(?:\(?\d{1,5}\)?[-\s.]?)?\d{1,5}(?:[-\s.]\d{1,5}){1,4}\b',
             # Card number regex: common formats, allows optional spaces/hyphens
             "credit_debit_no": r'\b(?:(?:\d{4}[\s-]?){3}\d{4}|\d{13,19})\b',
             # CVV: 3 or 4 digits, ensuring it's a standalone number (word boundary)
@@ -128,7 +128,7 @@ class PIIMasker:
 
     def verify_cvv(self, text: str, match: re.Match) -> bool:
         """Verify if a 3-4 digit number is actually a CVV using contextual clues"""
-        context_window = 30
+        context_window = 50
         start, end = match.span()
         value = match.group()
 
@@ -139,88 +139,94 @@ class PIIMasker:
         if char_before.isdigit() or char_after.isdigit():
             return False # It's part of a larger number
 
+        # Only consider 3-4 digit numbers
+        if not value.isdigit() or len(value) < 3 or len(value) > 4:
+            return False
+
         context_before = text[max(0, start - context_window):start].lower()
         context_after = text[end:min(len(text), end + context_window)].lower()
 
-        cvv_keywords = ["cvv", "cvc", "csc", "security code", "card verification", "verification no"]
-        date_keywords = ["date", "year", "/", "-", "born", "age", "since", "established", "version", "model", "grade"] # More exhaustive
+        # Expanded list of CVV-related keywords to improve detection
+        cvv_keywords = [
+            "cvv", "cvc", "csc", "security code", "card verification", "verification no",
+            "security", "security number", "cv2", "card code", "security value"
+        ]
+        
+        date_keywords = ["date", "year", "/", "born", "age", "since", "established"]
 
+        # Look for CVV context clues
         is_cvv_context = any(keyword in context_before or keyword in context_after for keyword in cvv_keywords)
 
-        # If it looks like a year in common contexts, it's probably not a CVV
-        # e.g. "since 2023", "class of 99", "born 1990"
-        if value.isdigit() and (1900 <= int(value) <= 2100 if len(value) == 4 else False):
-            year_context_keywords = ["year", "born", "fiscal", "established", "since", "class of", "ended", "began", "joined"]
-            if any(kw in context_before for kw in year_context_keywords):
-                return False # Likely a year
-            # If it's MM/YY or MM/YYYY context, it's expiry, not CVV
-            if re.search(r'\b(0[1-9]|1[0-2])[/\s-]$', context_before.strip()): # Ends with MM/
-                 return False # Part of an expiry date
+        # If explicitly mentioned as a CVV, immediately return true
+        if is_cvv_context:
+            return True
 
-        is_date_context = any(keyword in context_before or keyword in context_after for keyword in date_keywords)
+        # If it looks like a year, reject it
+        if len(value) == 4 and 1900 <= int(value) <= 2100:
+            if any(k in context_before or k in context_after for k in ["year", "born", "established", "since"]):
+                return False
 
-        # Check if the number itself looks like a year in typical CVV lengths
-        looks_like_year = False
-        if len(value) == 2 and value.isdigit(): # e.g. "23" for year in expiry
-            if any(k in context_before for k in ["expiry", "exp", "valid thru", "good thru"]) or \
-               re.search(r'\b(0[1-9]|1[0-2])[/\s-]$', context_before.strip()):
-                looks_like_year = True # It's the YY part of an expiry
-        elif len(value) == 4 and value.isdigit() and (1900 <= int(value) <= 2100):
-             if any(k in (context_before + context_after) for k in ["year", "born", "fiscal"]):
-                 looks_like_year = True
-
-
-        return is_cvv_context and not (is_date_context and looks_like_year)
+        # If in expiry date context, reject it
+        if re.search(r'\b(0[1-9]|1[0-2])[/\s-]$', context_before.strip()):
+            return False
+            
+        # If no context clues but we have a credit card mention nearby, it could be a CVV
+        card_context = any(k in context_before or k in context_after 
+                          for k in ["card", "credit", "visa", "mastercard", "amex", "discover"])
+        
+        return is_cvv_context or (card_context and len(value) in [3, 4])
 
     def verify_phone_number(self, text: str, match: re.Match) -> bool:
         """
         Verify if a match is actually a phone number using validation rules and context.
-        
-        This helps prevent:
-        1. CVV numbers being detected as phone numbers
-        2. Parts of a phone number being detected as separate numbers
-        3. Random digit sequences being detected as phone numbers
         """
         value = match.group()
         start, end = match.span()
         
-        # 1. Minimum digit count check (excluding formatting chars)
-        digit_count = sum(1 for c in value if c.isdigit())
-        if digit_count < 6:
-            return False  # Too few digits to be a valid phone number
+        # Extract only digits to count them
+        digits = ''.join(c for c in value if c.isdigit())
+        digit_count = len(digits)
         
-        if digit_count > 15:
-            return False  # Too many digits to be a realistic phone number
-            
-        # 2. Context check for phone numbers
+        # Most phone numbers worldwide have between 7 and 15 digits
+        if digit_count < 7 or digit_count > 15:
+            return False
+        
+        # Check for common phone number indicators
         context_window = 50
         context_before = text[max(0, start - context_window):start].lower()
         context_after = text[end:min(len(text), end + context_window)].lower()
         
+        # Expanded phone keywords
         phone_keywords = [
-            "phone", "call", "tel", "telephone", "contact", "dial", 
-            "mobile", "cell", "number", "direct", "office", "fax"
+            "phone", "call", "tel", "telephone", "contact", "dial", "mobile", "cell", 
+            "number", "direct", "office", "fax", "reach me at", "call me", "contact me",
+            "line", "extension", "ext", "phone number"
         ]
         
-        # If phone context keywords are found, increase confidence
+        # Check for phone context
         has_phone_context = any(kw in context_before or kw in context_after for kw in phone_keywords)
         
-        # 3. Check if this is likely part of a larger number or another entity
-        # Look for specific formatted patterns that indicate complete phone numbers
-        is_clean_formatted = bool(re.search(r'(?:\+\d{1,4}[-\s])?(?:\(\d+\)[-\s]?)?\d+(?:[-\s]\d+)+', value))
+        # Check for formatting that indicates a phone number
+        has_phone_formatting = bool(re.search(r'[-\s.()\+]', value))
         
-        # If not properly formatted but has a plus sign, it's likely an international number
+        # Check for international prefix
         has_intl_prefix = value.startswith('+') or value.startswith('00')
         
-        # If it has at least some formatting and reasonable digit count, or has clear phone context,
-        # we'll consider it a valid phone number
-        return (is_clean_formatted and digit_count >= 7) or (has_intl_prefix and digit_count >= 8) or (has_phone_context and digit_count >= 7)
+        # Return true if any of these conditions are met:
+        # 1. Has explicit phone context
+        # 2. Has phone-like formatting AND reasonable digit count
+        # 3. Has international prefix AND reasonable digit count
+        # 4. Has 10 digits exactly (common in many countries) with formatting
+        return has_phone_context or \
+               (has_phone_formatting and digit_count >= 7) or \
+               (has_intl_prefix) or \
+               (digit_count == 10 and has_phone_formatting)
 
     def detect_name_entities(self, text: str) -> List[Entity]:
         """Detect name entities using SpaCy NER"""
         entities = []
         doc = self.nlp(text)
-
+        
         for ent in doc.ents:
             # Use PER for person, common in many models like xx_ent_wiki_sm
             # Also checking for PERSON as some models might use it.
@@ -298,7 +304,7 @@ class PIIMasker:
                         # res is longer, current is dominated
                         temp_resolved.append(res_entity)
                         is_overlapped_or_contained = True # Mark current as handled
-                        break # Current is dominated
+                        break
                     else: # Same length, keep existing one (res_entity)
                         temp_resolved.append(res_entity)
                         is_overlapped_or_contained = True # Mark current as handled
