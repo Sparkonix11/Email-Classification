@@ -314,7 +314,7 @@ class PIIMasker:
                 new_text_parts.append(text[current_pos:entity.start])
 
             # Add the mask
-            mask = f"[{entity.entity_type.upper()}]" # Changed to upper for clarity
+            mask = f"[{entity.entity_type}]" # Changed to upper for clarity
             new_text_parts.append(mask)
 
             current_pos = entity.end
