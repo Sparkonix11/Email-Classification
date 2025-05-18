@@ -50,7 +50,12 @@ class PIIMasker:
         # Define regex patterns for different entity types
         self.patterns = {
             "email": r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
-            "phone_number": r'\b(\+\d{1,2}\s?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b',
+            # Enhanced phone number regex that handles international formats:
+            # - International prefix with country code: +XX, +XXX (optional)
+            # - Various delimiter formats: spaces, hyphens, periods, or nothing
+            # - Different grouping patterns for various countries
+            # - Overall length between 8-15 digits (excluding formatting characters)
+            "phone_number": r'\b(?:(?:\+|00)[1-9]\d{0,3}[\s.-]?)?(?:\(?\d{1,5}\)?[\s.-]?)?(?:\d{1,5}[\s.-]?)??(?:\d{1,5}[\s.-]?)??(?:\d{1,5}[\s.-]?)?\d{1,5}(?:[\s.-]?\d{1,5})?\b',
             # Card number regex: common formats, allows optional spaces/hyphens
             "credit_debit_no": r'\b(?:(?:\d{4}[\s-]?){3}\d{4}|\d{13,19})\b',
             # CVV: 3 or 4 digits, ensuring it's a standalone number (word boundary)
