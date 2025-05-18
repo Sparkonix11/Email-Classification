@@ -8,7 +8,7 @@ class EmailClassifier:
     Email classification model to categorize emails into different support categories
     """
     
-    CATEGORIES = ["Incident", "Request", "Change", "Problem"]
+    CATEGORIES = ['Change', 'Incident', 'Problem', 'Request']
     
     def __init__(self, model_path: str = None):
         """
