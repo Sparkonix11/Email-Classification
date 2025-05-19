@@ -111,8 +111,8 @@ class PIIMasker:
                 is_substring_of_existing = False
                 for existing_entity in entities:
                     if (existing_entity.start <= start
-                            and existing_entity.end >= end  # W504 corrected
-                            and existing_entity.value != value):  # W504 corrected
+                            and existing_entity.end >= end
+                            and existing_entity.value != value):
                         is_substring_of_existing = True
                         break
                 if is_substring_of_existing:
@@ -318,7 +318,7 @@ class PIIMasker:
                 # Res:         |----|   or |----| or   |--|  or  |------|
                 overlap = max(
                     0,
-                    min(current_entity.end, res_entity.end)  # Fixed W504 line break
+                    min(current_entity.end, res_entity.end)
                     - max(current_entity.start, res_entity.start)
                 )
 

@@ -151,7 +151,7 @@ The API exposes a single endpoint for email classification:
 ```python
 import requests
 
-url = "https://username-space-name.hf.space/classify"
+url = "https://sparkonix-email-classification-model.hf.space/classify"
 data = {
     "input_email_body": "Hello, my name is John Doe, and I'm having issues with my account."
 }
