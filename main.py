@@ -1,7 +1,7 @@
 import os
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from typing import Dict, Any, List, Tuple, Optional
+from typing import Dict, Any, List, Tuple
 import uvicorn
 from dotenv import load_dotenv
 
@@ -21,7 +21,7 @@ else:
     db_path = "emails.db"  # Fallback to local directory
 
 # Initialize the FastAPI application
-app = FastAPI(title="Email Classification API", 
+app = FastAPI(title="Email Classification API",
               description="API for classifying support emails and masking PII",
               version="1.0.0")
 
@@ -29,15 +29,18 @@ app = FastAPI(title="Email Classification API",
 pii_masker = PIIMasker(db_path=db_path)
 email_classifier = EmailClassifier()
 
+
 class EmailInput(BaseModel):
     """Input model for the email classification endpoint"""
     input_email_body: str
 
+
 class EntityInfo(BaseModel):
     """Model for entity information"""
     position: Tuple[int, int]
-    classification: str  
+    classification: str
     entity: str
+
 
 class EmailOutput(BaseModel):
     """Output model for the email classification endpoint"""
@@ -46,29 +49,30 @@ class EmailOutput(BaseModel):
     masked_email: str
     category_of_the_email: str
 
+
 class MaskedEmailInput(BaseModel):
     """Input model for retrieving original email by masked email content"""
     masked_email: str
     access_key: str
 
+
 @app.post("/classify", response_model=EmailOutput)
 async def classify_email(email_input: EmailInput) -> Dict[str, Any]:
     """
     Classify an email into a support category while masking PII
-    
+
     Args:
         email_input: The input email data
-        
+
     Returns:
         The classified email data with masked PII
     """
     try:
         # Process the email to mask PII and store original in database
         processed_data = pii_masker.process_email(email_input.input_email_body)
-        
         # Classify the masked email
         classified_data = email_classifier.process_email(processed_data)
-        
+
         # Make sure we return only the fields expected in the response model
         return {
             "input_email_body": email_input.input_email_body,
@@ -79,28 +83,35 @@ async def classify_email(email_input: EmailInput) -> Dict[str, Any]:
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing email: {str(e)}")
 
+
 @app.post("/api/v1/unmask-email", response_model=Dict[str, Any])
 async def unmask_email(masked_email_input: MaskedEmailInput) -> Dict[str, Any]:
     """
-    Retrieve the original unmasked email using the masked email content from the classify response.
-    
+    Retrieve the original unmasked email.
+
     Args:
         masked_email_input: Contains the masked email and access key
-        
+
     Returns:
         The original email data with PII information
     """
     try:
         # Verify access key matches the global access key
-        if masked_email_input.access_key != os.environ.get("EMAIL_ACCESS_KEY", "default_secure_access_key"):
+        if masked_email_input.access_key != os.environ.get(
+                "EMAIL_ACCESS_KEY", "default_secure_access_key"):
             raise HTTPException(status_code=401, detail="Invalid access key")
-        
+
         # Retrieve the original email using the masked content
-        email_data = pii_masker.get_original_by_masked_email(masked_email_input.masked_email)
-        
+        email_data = pii_masker.get_original_by_masked_email(
+            masked_email_input.masked_email
+        )
+
         if not email_data:
-            raise HTTPException(status_code=404, detail="Original email not found for the provided masked email")
-        
+            raise HTTPException(
+                status_code=404,
+                detail="Original email not found for the provided masked email"
+            )
+
         return {
             "status": "success",
             "data": {
@@ -116,17 +127,22 @@ async def unmask_email(masked_email_input: MaskedEmailInput) -> Dict[str, Any]:
     except Exception as e:
         if isinstance(e, HTTPException):
             raise e
-        raise HTTPException(status_code=500, detail=f"Error retrieving original email: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error retrieving original email: {str(e)}"
+        )
+
 
 @app.get("/health")
 async def health_check():
     """
     Health check endpoint
-    
+
     Returns:
         Status message indicating the API is running
     """
     return {"status": "healthy", "message": "Email classification API is running"}
+
 
 # For local development and testing
 if __name__ == "__main__":

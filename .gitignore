@@ -33,7 +33,7 @@ env/
 .vscode/
 *.swp
 *.swo
-
+.flake8
 # Jupyter Notebook
 .ipynb_checkpoints
 
